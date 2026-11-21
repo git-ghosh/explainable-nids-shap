@@ -1,0 +1,33 @@
+{
+  "raw_records": 257673,
+  "after_nan_inf_removal": 257673,
+  "after_deduplication": 145222,
+  "conflicting_label_rows": 8351,
+  "classes_dropped_min_count": [],
+  "n_used": 145222,
+  "n_features": 34,
+  "classes": [
+    "Analysis",
+    "Backdoor",
+    "DoS",
+    "Exploits",
+    "Fuzzers",
+    "Generic",
+    "Normal",
+    "Reconnaissance",
+    "Shellcode",
+    "Worms"
+  ],
+  "class_counts": {
+    "Analysis": 1442,
+    "Backdoor": 1389,
+    "DoS": 4873,
+    "Exploits": 26749,
+    "Fuzzers": 18313,
+    "Generic": 3057,
+    "Normal": 79965,
+    "Reconnaissance": 8012,
+    "Shellcode": 1257,
+    "Worms": 165
+  }
+}

@@ -1,0 +1,11 @@
+BENIGN,Init_Win_bytes_forward,Init_Win_bytes_backward,Bwd Packet Length Min,Bwd Packet Length Std,Flow IAT Min
+Bot,Bwd IAT Std,Bwd Packet Length Mean,min_seg_size_forward,Flow IAT Min,Flow Packets/s
+DDoS,min_seg_size_forward,ACK Flag Count,Init_Win_bytes_forward,Fwd Packet Length Max,Fwd Packet Length Std
+DoS GoldenEye,Fwd IAT Total,Fwd IAT Mean,Fwd IAT Max,Flow IAT Max,Flow IAT Mean
+DoS Hulk,Init_Win_bytes_forward,Init_Win_bytes_backward,Fwd IAT Std,Fwd Header Length,Fwd IAT Min
+DoS Slowhttptest,Fwd IAT Total,Flow IAT Max,Fwd IAT Max,Flow IAT Mean,Flow Duration
+DoS slowloris,Flow Duration,Fwd IAT Mean,Init_Win_bytes_forward,Flow IAT Min,Packet Length Std
+FTP-Patator,Init_Win_bytes_forward,Fwd Packet Length Min,Bwd Header Length,Total Length of Fwd Packets,Init_Win_bytes_backward
+PortScan,PSH Flag Count,Init_Win_bytes_forward,Bwd Packets/s,Flow Duration,Packet Length Mean
+SSH-Patator,Init_Win_bytes_forward,Fwd Packet Length Max,Bwd Header Length,Flow Duration,Init_Win_bytes_backward
+Web Attack,Init_Win_bytes_backward,Flow IAT Min,Fwd IAT Std,Fwd IAT Min,min_seg_size_forward

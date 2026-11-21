@@ -1,0 +1,5 @@
+,mean,std
+kendall_tau_shap_across_splits,0.9301247771836009,0.008761644012438168
+top10_jaccard_across_splits,0.9272727272727274,0.08907235428302464
+kendall_tau_shap_vs_gain,0.7433155080213905,
+kendall_tau_shap_vs_permutation,0.500891265597148,

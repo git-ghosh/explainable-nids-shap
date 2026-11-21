@@ -1,0 +1,39 @@
+{
+  "raw_records": 2830743,
+  "after_nan_inf_removal": 2827876,
+  "after_deduplication": 2520798,
+  "conflicting_label_rows": 1394,
+  "classes_dropped_min_count": [
+    "Infiltration",
+    "Heartbleed"
+  ],
+  "note": "Destination Port excluded from default feature set",
+  "n_used": 2520751,
+  "n_features": 76,
+  "classes": [
+    "BENIGN",
+    "Bot",
+    "DDoS",
+    "DoS GoldenEye",
+    "DoS Hulk",
+    "DoS Slowhttptest",
+    "DoS slowloris",
+    "FTP-Patator",
+    "PortScan",
+    "SSH-Patator",
+    "Web Attack"
+  ],
+  "class_counts": {
+    "BENIGN": 2095057,
+    "Bot": 1948,
+    "DDoS": 128014,
+    "DoS GoldenEye": 10286,
+    "DoS Hulk": 172846,
+    "DoS Slowhttptest": 5228,
+    "DoS slowloris": 5385,
+    "FTP-Patator": 5931,
+    "PortScan": 90694,
+    "SSH-Patator": 3219,
+    "Web Attack": 2143
+  }
+}

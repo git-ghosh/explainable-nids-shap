@@ -1,0 +1,40 @@
+{
+  "LogReg": {
+    "logisticregression__C": 9.091283280651457
+  },
+  "DecisionTree": {
+    "min_samples_leaf": 2,
+    "max_depth": 20
+  },
+  "RandomForest": {
+    "n_estimators": 300,
+    "min_samples_leaf": 4,
+    "max_features": 0.5,
+    "max_depth": 40
+  },
+  "XGBoost": {
+    "colsample_bytree": 0.7118273996694524,
+    "learning_rate": 0.11499009064369851,
+    "max_depth": 8,
+    "n_estimators": 287,
+    "subsample": 0.9567092003128319
+  },
+  "MLP": {
+    "mlpclassifier__alpha": 0.00017538232373118029,
+    "mlpclassifier__hidden_layer_sizes": [
+      128,
+      64
+    ],
+    "mlpclassifier__learning_rate_init": 0.003535634629148813
+  },
+  "LightGBM": {
+    "colsample_bytree": 0.6921908536463499,
+    "learning_rate": 0.04476698494897336,
+    "min_child_samples": 98,
+    "n_estimators": 288,
+    "num_leaves": 171,
+    "reg_lambda": 3.8344151882577773,
+    "subsample": 0.9166900152330658,
+    "subsample_freq": 1
+  }
+}

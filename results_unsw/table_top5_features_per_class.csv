@@ -1,0 +1,10 @@
+Analysis,smean,proto,sbytes,stcpb,dmean
+Backdoor,sload,sbytes,proto,smean,sloss
+DoS,ct_src_dport_ltm,dbytes,smean,dload,sbytes
+Exploits,ackdat,dbytes,sbytes,rate,synack
+Fuzzers,dbytes,service,dmean,dloss,synack
+Generic,sbytes,smean,dbytes,sloss,dloss
+Normal,dload,ackdat,tcprtt,synack,proto
+Reconnaissance,dbytes,sloss,smean,sbytes,service
+Shellcode,service,ct_src_dport_ltm,dbytes,sbytes,smean
+Worms,sbytes,smean,service,synack,ct_src_dport_ltm
