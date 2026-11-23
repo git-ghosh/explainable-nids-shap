@@ -1,25 +1,8 @@
 #!/usr/bin/env python3
 """
 Reproducible experiments for the paper
-  "An Explainable Machine Learning Framework for Real-Time Network Intrusion
-   Detection Using SHAP and LightGBM"
-
-Everything reported in the paper's result tables/figures is produced here.
-Nothing in the paper's results is hard-coded: run this script, then copy the
-numbers from <out>/table_*.csv into the yellow placeholders and insert the
-fig_*.png files.
-
-Install:
-    pip install lightgbm shap xgboost scikit-learn pandas numpy scipy matplotlib
-    pip install lime            # optional (LIME timing comparison)
-
-Run (CIC-IDS2017, the 8 "MachineLearningCVE" CSV files in one folder):
-    python run_experiments.py --dataset cicids2017 --data /path/to/MachineLearningCVE --out results_cic
-
-Run (UNSW-NB15, folder containing UNSW_NB15_training-set.csv and UNSW_NB15_testing-set.csv):
-    python run_experiments.py --dataset unsw --data /path/to/UNSW-NB15 --out results_unsw
-
-Laptop-friendly: add  --max-rows 500000 .  Quick smoke test: add  --fast .
+  "Explainable Network Intrusion Detection Using LightGBM and TreeSHAP:
+   Accuracy, Explanation Faithfulness, and Real-Time Deployment Feasibility"
 """
 import argparse
 import json
@@ -58,6 +41,15 @@ import xgboost as xgb
 
 warnings.filterwarnings("ignore")
 
+def _xgb_dev():
+    try:
+        xgb.XGBClassifier(tree_method="hist", device="cuda", n_estimators=2).fit([[0,1],[1,0]], [0,1])
+        return "cuda"
+    except Exception:
+        return "cpu"
+
+XGB_DEV = _xgb_dev()
+
 CIC_ID_COLS = ["Flow ID", "Source IP", "Source Port", "Destination IP", "Timestamp"]
 DST_PORT = "Destination Port"
 
@@ -82,16 +74,31 @@ def load_cicids(path, min_count, keep_port):
     df = df.drop(columns=["Label"] + [c for c in CIC_ID_COLS if c in df.columns])
     df = df.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan)
     df["__label__"] = label.values
+
+    n_before_nan = len(df)
     df = df.dropna()
+    stats["dropped_nan_inf_rows"] = int(n_before_nan - len(df))
     stats["after_nan_inf_removal"] = int(len(df))
+
+    n_before_dup = len(df)
     df = df.drop_duplicates()
+    stats["dropped_exact_duplicates"] = int(n_before_dup - len(df))
     stats["after_deduplication"] = int(len(df))
+
+    # Remove feature-identical rows that carry conflicting class labels
     feats = [c for c in df.columns if c != "__label__"]
-    stats["conflicting_label_rows"] = int(df.duplicated(subset=feats, keep=False).sum())
+    conflict_mask = df.duplicated(subset=feats, keep=False)
+    stats["conflicting_label_rows"] = int(conflict_mask.sum())
+    df = df[~conflict_mask].reset_index(drop=True)
+    stats["after_conflict_removal"] = int(len(df))
+
     counts = df["__label__"].value_counts()
     dropped = counts[counts < min_count].index.tolist()
+    stats["dropped_min_count_rows"] = int(df["__label__"].isin(dropped).sum())
     df = df[~df["__label__"].isin(dropped)]
     stats["classes_dropped_min_count"] = dropped
+    stats["final_cleaned_records"] = int(len(df))
+
     y = df["__label__"].values
     X = df.drop(columns="__label__").astype(np.float32).reset_index(drop=True)
     if not keep_port and DST_PORT in X.columns:
@@ -114,16 +121,31 @@ def load_unsw(path, min_count):
                                       unknown_value=-1).fit_transform(df[cat_cols].astype(str))
     df = df.apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan)
     df["__label__"] = y.values
+
+    n_before_nan = len(df)
     df = df.dropna()
+    stats["dropped_nan_inf_rows"] = int(n_before_nan - len(df))
     stats["after_nan_inf_removal"] = int(len(df))
+
+    n_before_dup = len(df)
     df = df.drop_duplicates()
+    stats["dropped_exact_duplicates"] = int(n_before_dup - len(df))
     stats["after_deduplication"] = int(len(df))
+
+    # Remove feature-identical rows that carry conflicting class labels
     feats = [c for c in df.columns if c != "__label__"]
-    stats["conflicting_label_rows"] = int(df.duplicated(subset=feats, keep=False).sum())
+    conflict_mask = df.duplicated(subset=feats, keep=False)
+    stats["conflicting_label_rows"] = int(conflict_mask.sum())
+    df = df[~conflict_mask].reset_index(drop=True)
+    stats["after_conflict_removal"] = int(len(df))
+
     counts = df["__label__"].value_counts()
     dropped = counts[counts < min_count].index.tolist()
+    stats["dropped_min_count_rows"] = int(df["__label__"].isin(dropped).sum())
     df = df[~df["__label__"].isin(dropped)]
     stats["classes_dropped_min_count"] = dropped
+    stats["final_cleaned_records"] = int(len(df))
+
     return (df.drop(columns="__label__").astype(np.float32).reset_index(drop=True),
             df["__label__"].values, "Normal", stats)
 
@@ -163,7 +185,7 @@ def model_zoo(seed, n_jobs):
         "RandomForest": (RandomForestClassifier(class_weight="balanced", n_jobs=n_jobs, random_state=seed),
                          {"n_estimators": [100, 200, 300], "max_depth": [None, 20, 40],
                           "min_samples_leaf": [1, 2, 4], "max_features": ["sqrt", 0.5]}),
-        "XGBoost": (xgb.XGBClassifier(tree_method="hist", n_jobs=n_jobs, random_state=seed),
+        "XGBoost": (xgb.XGBClassifier(tree_method="hist", device=XGB_DEV, n_jobs=n_jobs, random_state=seed),
                     {"n_estimators": randint(200, 501), "max_depth": randint(4, 13),
                      "learning_rate": loguniform(0.02, 0.3), "subsample": uniform(0.6, 0.4),
                      "colsample_bytree": uniform(0.5, 0.5)}),
@@ -273,11 +295,13 @@ def main():
     ap.add_argument("--dataset", choices=["cicids2017", "unsw"], required=True)
     ap.add_argument("--data", required=True)
     ap.add_argument("--out", default="results")
+    ap.add_argument("--params-json", default=None)
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--max-rows", type=int, default=None)
     ap.add_argument("--n-iter", type=int, default=20, help="random-search iterations per model")
     ap.add_argument("--tune-rows", type=int, default=100000)
     ap.add_argument("--shap-n", type=int, default=5000)
+    ap.add_argument("--faith-n", type=int, default=25000, help="proportional stratified test flows for deletion test")
     ap.add_argument("--min-class-count", type=int, default=50)
     ap.add_argument("--keep-dst-port", action="store_true")
     ap.add_argument("--eps", type=float, default=0.005, help="tolerance for choosing k*")
@@ -285,7 +309,7 @@ def main():
     ap.add_argument("--fast", action="store_true")
     a = ap.parse_args()
     if a.fast:
-        a.max_rows, a.seeds, a.n_iter, a.tune_rows, a.shap_n = 30000, 2, 3, 10000, 500
+        a.max_rows, a.seeds, a.n_iter, a.tune_rows, a.shap_n, a.faith_n = 30000, 2, 3, 10000, 500, 5000
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     tick = lambda m: print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)
@@ -308,32 +332,41 @@ def main():
                  class_counts={c: int((y_all == i).sum()) for i, c in enumerate(classes)})
     json.dump(stats, open(out / "dataset_stats.json", "w"), indent=2, default=str)
     pd.Series(stats["class_counts"], name="records").to_csv(out / "table_class_counts.csv")
+    tick(f"Cleaning summary: {stats}")
     tick(f"{len(X)} records, {len(feats)} features, {K} classes: {classes}")
 
     # ---- hyper-parameter search on seed-0 training data (equal budget) ------ #
-    tick("hyper-parameter search")
-    Xtr0, _, ytr0, _ = train_test_split(X, y_all, test_size=0.2, stratify=y_all, random_state=0)
-    Xt, yt = stratified_sample(Xtr0.reset_index(drop=True), ytr0, a.tune_rows, seed=0, floor=60)
-    best = {}
-    for name, (est, space) in model_zoo(0, a.n_jobs).items():
-        kw = {"sample_weight": compute_sample_weight("balanced", yt)} if name == "XGBoost" else {}
-        rs = RandomizedSearchCV(est, space, n_iter=a.n_iter, scoring="f1_macro", refit=False,
-                                cv=StratifiedKFold(3, shuffle=True, random_state=0), random_state=0)
-        rs.fit(Xt, yt, **kw)
-        best[name] = rs.best_params_
-        tick(f"  {name}: cv macro-F1 {rs.best_score_:.4f}")
+    if a.params_json and Path(a.params_json).exists():
+        best = json.load(open(a.params_json))
+        tick(f"loaded pre-tuned params from {a.params_json} (XGB device: {XGB_DEV})")
+    else:
+        tick("hyper-parameter search")
+        Xtr0, _, ytr0, _ = train_test_split(X, y_all, test_size=0.2, stratify=y_all, random_state=0)
+        Xt, yt = stratified_sample(Xtr0.reset_index(drop=True), ytr0, a.tune_rows, seed=0, floor=60)
+        best = {}
+        for name, (est, space) in model_zoo(0, a.n_jobs).items():
+            kw = {"sample_weight": compute_sample_weight("balanced", yt)} if name == "XGBoost" else {}
+            rs = RandomizedSearchCV(est, space, n_iter=a.n_iter, scoring="f1_macro", refit=False,
+                                    cv=StratifiedKFold(3, shuffle=True, random_state=0), random_state=0)
+            rs.fit(Xt, yt, **kw)
+            best[name] = rs.best_params_
+            tick(f"  {name}: cv macro-F1 {rs.best_score_:.4f}")
     json.dump(best, open(out / "best_params.json", "w"), indent=2, default=str)
 
     # ---- main loop over stratified splits ----------------------------------- #
-    det_rows, cls_rows, abl_rows, fs_rows, rank_val, kstars = [], [], [], [], [], []
-    ks_grid = [k for k in ([5, 10] if a.fast else [10, 15, 20, 30]) if k < len(feats)]
+    det_rows, cls_rows, abl_rows, fs_rows, faith_rows, rank_val, kstars = [], [], [], [], [], [], []
+    ks_grid = [k for k in ([5, 10] if a.fast else [5, 10, 15, 20, 30]) if k < len(feats)]
+    ks_f = [k for k in [1, 2, 3, 5, 8, 10, 15, 20] if k <= len(feats)]
     final = {}  # seed-0 artefacts reused by the explanation analyses
+
     for seed in range(a.seeds):
         tick(f"split seed {seed}")
         Xtr, Xte, ytr, yte = train_test_split(X, y_all, test_size=0.2, stratify=y_all, random_state=seed)
         share = np.bincount(ytr, minlength=K) / len(ytr)
         minority = [k for k in range(K) if share[k] < 0.01]
+
         # 1) detection performance of all models
+        lgb_model = None
         for name, (est, _) in model_zoo(seed, a.n_jobs).items():
             m = clone(est).set_params(**best[name])
             ft = fit_model(name, m, Xtr, ytr)
@@ -343,7 +376,9 @@ def main():
             f1c = f1_score(yte, pred, labels=list(range(K)), average=None, zero_division=0)
             cls_rows += [dict(seed=seed, model=name, cls=classes[k], f1=f1c[k]) for k in range(K)]
             if name == "LightGBM":
+                lgb_model = m
                 final.setdefault("model", {})[seed] = m
+
         # 2) ablation of the LightGBM design choices
         variants = {"A: default hyper-parameters, no class weights": lgbm({}, seed, a.n_jobs, class_weight=None),
                     "B: tuned, no class weights": lgbm(best["LightGBM"], seed, a.n_jobs, class_weight=None),
@@ -363,6 +398,7 @@ def main():
             abl_rows.append(dict(seed=seed, variant="D: C + Destination Port feature",
                                  macro_f1=f1_score(yte, pr, average="macro"), mcc=matthews_corrcoef(yte, pr),
                                  minority_f1=float(np.mean(f1c[minority])) if minority else np.nan))
+
         # 3) SHAP-guided feature reduction: ranking + k* chosen on VALIDATION data only
         Xf, Xv, yf, yv = train_test_split(Xtr, ytr, test_size=0.2, stratify=ytr, random_state=seed)
         mv = lgbm(best["LightGBM"], seed, a.n_jobs).fit(Xf, yf)
@@ -388,6 +424,35 @@ def main():
         for r in rows_k:
             r["is_k_star"] = (r["k"] == kstar)
         fs_rows += rows_k
+
+        # 4) Leakage-free multi-split deletion faithfulness (validation SHAP ranking on proportional test slice)
+        if a.faith_n < len(Xte):
+            Xf_te, _, yf_te, _ = train_test_split(Xte, yte, train_size=a.faith_n, stratify=yte, random_state=seed)
+        else:
+            Xf_te, yf_te = Xte, yte
+        Xf_vals = Xf_te.values
+        base_f1 = f1_score(yf_te, lgb_model.predict(Xf_vals), average="macro")
+        gain_seed = lgb_model.booster_.feature_importance(importance_type="gain")
+        shap_idx = np.argsort(-imp_val)
+        gain_idx = np.argsort(-gain_seed)
+        rng_f = np.random.RandomState(seed)
+
+        def perm_f1(col_indices, n_rep=3):
+            vals = []
+            for _ in range(n_rep):
+                Z = Xf_vals.copy()
+                for j in col_indices:
+                    Z[:, j] = rng_f.permutation(Z[:, j])
+                vals.append(f1_score(yf_te, lgb_model.predict(Z), average="macro"))
+            return float(np.mean(vals))
+
+        for k in ks_f:
+            rnd_f1 = float(np.mean([perm_f1(rng_f.choice(len(feats), k, replace=False), n_rep=1) for _ in range(5)]))
+            faith_rows.append(dict(seed=seed, k=k, baseline=base_f1,
+                                   shap_top_k=perm_f1(shap_idx[:k], n_rep=3),
+                                   gain_top_k=perm_f1(gain_idx[:k], n_rep=3),
+                                   random_k=rnd_f1))
+
         if seed == 0:
             final.update(Xtr=Xtr, Xte=Xte, ytr=ytr, yte=yte)
 
@@ -413,6 +478,27 @@ def main():
     fsg = fs.groupby("k")[["macro_f1", "mcc", "val_macro_f1"]].agg(["mean", "std"])
     fsg.to_csv(out / "table_feature_reduction_acc.csv")
     pd.Series(kstars, name="k_star").to_csv(out / "k_star_per_seed.csv", index=False)
+
+    # Save multi-split faithfulness table and plot ---------------------------- #
+    faith_df = pd.DataFrame(faith_rows)
+    faith_df.to_csv(out / "raw_faithfulness.csv", index=False)
+    fg = faith_df.groupby("k")[["baseline", "shap_top_k", "gain_top_k", "random_k"]].agg(["mean", "std"]).reset_index()
+    fg.columns = ["k", "baseline_mean", "baseline_std", "shap_mean", "shap_std",
+                  "gain_mean", "gain_std", "random_mean", "random_std"]
+    fg.to_csv(out / "table_faithfulness.csv", index=False)
+
+    plt.figure(figsize=(3.4, 2.6))
+    for mcol, scol, lab in [("shap_mean", "shap_std", "SHAP top-k"),
+                            ("gain_mean", "gain_std", "Gain top-k"),
+                            ("random_mean", "random_std", "Random k")]:
+        plt.plot(fg["k"], fg[mcol], marker="o", ms=3, label=lab)
+        plt.fill_between(fg["k"], fg[mcol] - fg[scol], fg[mcol] + fg[scol], alpha=0.15)
+    plt.xlabel("number of permuted features k")
+    plt.ylabel("macro-F1")
+    plt.legend(fontsize=7)
+    plt.tight_layout()
+    plt.savefig(out / "fig_faithfulness.png", dpi=300)
+    plt.close()
 
     # ---- explanation analyses on the seed-0 final model --------------------- #
     tick("explanation analyses (seed 0)")
@@ -441,7 +527,7 @@ def main():
             json.dump({"true": classes[ys[err[0]]], "predicted": classes[pred_s[err[0]]]},
                       open(out / "misclassified_case.json", "w"))
         json.dump({"focus_class": classes[focus]}, open(out / "focus_class.json", "w"))
-    except Exception as e:  # plotting differences between shap versions must not stop the run
+    except Exception as e:
         tick(f"  SHAP plot warning: {e}")
 
     # stability across seeds (rankings computed on validation data) ----------- #
@@ -459,34 +545,6 @@ def main():
             "kendall_tau_shap_vs_gain": (kendalltau(imp, gain).correlation, np.nan),
             "kendall_tau_shap_vs_permutation": (kendalltau(imp, perm).correlation, np.nan)}
     pd.DataFrame(stab, index=["mean", "std"]).T.to_csv(out / "table_stability_agreement.csv")
-
-    # deletion-based faithfulness ----------------------------------------------- #
-    rng = np.random.RandomState(0)
-    base = f1_score(ys, pred_s, average="macro")
-    ks_f = [k for k in [1, 2, 3, 5, 8, 10, 15, 20] if k <= len(feats)]
-
-    def f1_after(idx):
-        Z = Xs.values.copy()
-        for j in idx:
-            Z[:, j] = rng.permutation(Z[:, j])
-        return f1_score(ys, model.predict(pd.DataFrame(Z, columns=feats)), average="macro")
-
-    faith = []
-    for k in ks_f:
-        rnd = np.mean([f1_after(rng.choice(len(feats), k, replace=False)) for _ in range(10)])
-        faith.append(dict(k=k, baseline=base, shap_top_k=f1_after(np.argsort(-imp)[:k]),
-                          gain_top_k=f1_after(np.argsort(-gain)[:k]), random_k=rnd))
-    faith = pd.DataFrame(faith)
-    faith.to_csv(out / "table_faithfulness.csv", index=False)
-    plt.figure(figsize=(3.4, 2.6))
-    for col, lab in [("shap_top_k", "SHAP top-k"), ("gain_top_k", "Gain top-k"), ("random_k", "Random k")]:
-        plt.plot(faith["k"], faith[col], marker="o", ms=3, label=lab)
-    plt.xlabel("number of permuted features k")
-    plt.ylabel("macro-F1")
-    plt.legend(fontsize=7)
-    plt.tight_layout()
-    plt.savefig(out / "fig_faithfulness.png", dpi=300)
-    plt.close()
 
     # confusion matrix ---------------------------------------------------------- #
     cm = confusion_matrix(yte, model.predict(Xte), labels=list(range(K)), normalize="true")

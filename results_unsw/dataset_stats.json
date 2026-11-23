@@ -1,10 +1,15 @@
 {
   "raw_records": 257673,
+  "dropped_nan_inf_rows": 0,
   "after_nan_inf_removal": 257673,
+  "dropped_exact_duplicates": 112451,
   "after_deduplication": 145222,
   "conflicting_label_rows": 8351,
+  "after_conflict_removal": 136871,
+  "dropped_min_count_rows": 0,
   "classes_dropped_min_count": [],
-  "n_used": 145222,
+  "final_cleaned_records": 136871,
+  "n_used": 136871,
   "n_features": 34,
   "classes": [
     "Analysis",
@@ -19,15 +24,15 @@
     "Worms"
   ],
   "class_counts": {
-    "Analysis": 1442,
-    "Backdoor": 1389,
-    "DoS": 4873,
-    "Exploits": 26749,
-    "Fuzzers": 18313,
-    "Generic": 3057,
-    "Normal": 79965,
-    "Reconnaissance": 8012,
-    "Shellcode": 1257,
-    "Worms": 165
+    "Analysis": 439,
+    "Backdoor": 350,
+    "DoS": 3546,
+    "Exploits": 25329,
+    "Fuzzers": 16658,
+    "Generic": 2779,
+    "Normal": 79527,
+    "Reconnaissance": 6939,
+    "Shellcode": 1154,
+    "Worms": 150
   }
 }

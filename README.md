@@ -1,4 +1,3 @@
-cat << 'EOF' > README.md
 # Explainable Network Intrusion Detection Using LightGBM and TreeSHAP
 
 Reproducible implementation for the paper:
@@ -25,3 +24,11 @@ Reproducible implementation for the paper:
 python -m venv nids-env
 source nids-env/bin/activate  # On Windows: .\nids-env\Scripts\Activate.ps1
 pip install lightgbm shap xgboost scikit-learn pandas numpy scipy matplotlib lime
+```
+
+Run full experiments on UNSW-NB15 and CIC-IDS2017:
+
+```bash
+python run_experiments.py --dataset unsw --data datasets/unsw --out results_unsw
+python run_experiments.py --dataset cicids2017 --data datasets/cicids2017 --out results_cic
+```
