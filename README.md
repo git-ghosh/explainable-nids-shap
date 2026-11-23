@@ -1,28 +1,27 @@
+cat << 'EOF' > README.md
 # Explainable Network Intrusion Detection Using LightGBM and TreeSHAP
 
-Official code, experimental configuration, and benchmark results for the paper:  
-**"Explainable Network Intrusion Detection Using LightGBM and TreeSHAP: Accuracy, Explanation Faithfulness, and Real-Time Deployment Feasibility"**
+Reproducible implementation for the paper:
+> **Explainable Network Intrusion Detection Using LightGBM and TreeSHAP: Accuracy, Explanation Faithfulness, and Real-Time Deployment Feasibility**
 
-**Author:** Antor Ghosh (Department of Computer Science and Engineering, Daffodil International University)
+## Key Highlights
+- **Leakage-Free Data Sanitization:** Removes non-finite records, exact duplicates, and feature-identical rows with conflicting class labels *prior* to stratified splitting, and excludes `Destination Port` by default to prevent port-number shortcut learning.
+- **Multi-Model Benchmarking:** Evaluates class-weighted **LightGBM** against Logistic Regression, Decision Tree, Random Forest, MLP, and XGBoost across 5 stratified splits on **CIC-IDS2017** (`2,519,357` cleaned records, 11 classes, 76 features) and **UNSW-NB15** (`136,871` cleaned records, 10 classes, 34 features).
+- **Verified Explainability:** Evaluates exact **TreeSHAP** attributions via multi-split deletion faithfulness curves (on stratified 25,000-flow test subsets using validation-only feature rankings), cross-split Kendall's $\tau$ and top-10 Jaccard stability, and validation-guided feature reduction.
+- **Real-Time SOC Feasibility:** Single-thread median inference latency of `0.39–0.56 ms` (`2,020–2,942 flows/s`) and `3.61–7.65 ms` per-alert TreeSHAP attribution (`42x–126x` faster than LIME).
 
----
+## Summary of Results (5-Split Mean ± Std)
 
-## Overview
+| Dataset | Model | Macro-F1 (%) | MCC (%) | ROC-AUC (%) | Median Latency | TreeSHAP / Alert |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **CIC-IDS2017** (76 feat.) | **LightGBM** | **97.55 ± 0.07** | **99.71 ± 0.01** | **99.99 ± 0.01** | 0.56 ms | 4.15 ms |
+| **CIC-IDS2017** (Top-15) | **LightGBM** | **97.17 ± 0.25** | **99.64 ± 0.02** | — | **0.48 ms** | **3.61 ms** |
+| **UNSW-NB15** (34 feat.) | **LightGBM** | **67.48 ± 1.19** | **74.42 ± 0.19** | **98.27 ± 0.07** | **0.39 ms** | 7.65 ms |
+| **UNSW-NB15** (Top-30) | **LightGBM** | **67.39 ± 1.03** | **74.45 ± 0.18** | — | 0.41 ms | **7.36 ms** |
 
-This repository provides a reproducible, leakage-aware evaluation pipeline for explainable network intrusion detection systems (NIDS). The framework combines a class-balanced multiclass **LightGBM** detector with **TreeSHAP** in a tiered **explain-on-alert** architecture:
+## Installation & Usage
 
-- **Leakage-Aware Protocol:** Cleaning, de-duplication, conflicting-label resolution, and removal of shortcut identifier attributes (such as `Destination Port` in CIC-IDS2017) prior to stratified splitting.
-- **Tiered Explain-on-Alert Design:** Every network flow is scored in sub-millisecond time (`0.39 ms` median latency), while exact Shapley explanations are computed only on flagged alerts (`3.29 ms/alert`, **108× faster** than LIME).
-- **SHAP-Guided Feature Reduction:** Selects compact feature subsets strictly from validation SHAP rankings, retaining **96.97% macro-F1** on CIC-IDS2017 using only **15 of 76 features** (80.26% feature reduction).
-- **Quantitative XAI Evaluation:** Measures cross-split ranking stability (Kendall's $\tau$), agreement with split-gain and permutation importance, and top-$k$ deletion faithfulness across five stratified splits.
-
----
-
-## Repository Structure
-
-```text
-explainable-nids-shap/
-├── run_experiments.py      # Full reproducible training, evaluation, XAI & latency pipeline
-├── results_cic/            # Metrics, tables, and figures for CIC-IDS2017
-├── results_unsw/           # Metrics, tables, and figures for UNSW-NB15
-└── README.md
+```bash
+python -m venv nids-env
+source nids-env/bin/activate  # On Windows: .\nids-env\Scripts\Activate.ps1
+pip install lightgbm shap xgboost scikit-learn pandas numpy scipy matplotlib lime
